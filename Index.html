@@ -229,6 +229,16 @@
             object-fit: cover;
         }
         
+        .logo-icon span {
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        
         .header-controls {
             display: flex;
             align-items: center;
@@ -1349,7 +1359,8 @@
         <div class="header-container">
             <a href="#" class="application-logo">
                 <div class="logo-icon">
-                    <img src="https://drive.google.com/uc?id=1LkntW9-YTsU6s3Wvwrkp8Q6-NkoKNyX0" alt="Logo ECNPC" onerror="this.style.display='none'; this.parentElement.innerHTML='IECNPC';">
+                    <img id="logoImage" src="" alt="Logo ECNPC" style="display: none;">
+                    <span id="logoFallback" style="display: flex;">ECNPC</span>
                 </div>
                 <span>Quadern de notes</span>
             </a>
@@ -1436,7 +1447,7 @@
             pendingSaves: new Set(),
             config: { ras: [], instruments: [], rubriques: [] },
             definicionsRubriques: {}, qualificacionsRubrica: {},
-            activeFilter: 'all'
+            activeFilter: 'all', logoUrl: null
         };
         let currentRubricEvaluation = {};
         let saveTimeout;
@@ -1456,13 +1467,82 @@
         async function loadInitialSelectors() {
             showLoading(true);
             try {
+                console.log('=== Carregant dades inicials ===');
                 const data = await run('getInitialData');
+                console.log('Resposta del servidor:', data);
+                
                 if (data.success) {
                     populateSelect('grupSelector', data.groups, 'Selecciona grup...');
                     populateSelect('modulSelector', data.modules, 'Selecciona mòdul...');
+                    
+                    // Debug del logo
+                    console.log('=== LOGO DEBUG CLIENT ===');
+                    console.log('logoUrl rebut:', data.logoUrl ? 'SÍ' : 'NO');
+                    if (data.logoUrl) {
+                        console.log('Longitud logoUrl:', data.logoUrl.length);
+                        console.log('Primers 100 chars:', data.logoUrl.substring(0, 100));
+                        state.logoUrl = data.logoUrl;
+                        loadLogo(data.logoUrl);
+                    } else {
+                        console.log('Cap logoUrl rebut del servidor');
+                        // Assegurem que el fallback es mostra
+                        ensureFallbackVisible();
+                    }
+                    
+                    // Debug info del servidor
+                    if (data.debug) {
+                        console.log('Debug info del servidor:', data.debug);
+                    }
+                } else {
+                    console.error('Error del servidor:', data.error);
                 }
-            } catch (error) { console.error('Error inicialitzant:', error); } 
-            finally { showLoading(false); }
+            } catch (error) { 
+                console.error('Error inicialitzant:', error); 
+                ensureFallbackVisible();
+            } finally { 
+                showLoading(false); 
+            }
+        }
+
+        function ensureFallbackVisible() {
+            console.log('Assegurant que el fallback sigui visible');
+            const logoImg = document.getElementById('logoImage');
+            const logoFallback = document.getElementById('logoFallback');
+            
+            if (logoImg) logoImg.style.display = 'none';
+            if (logoFallback) {
+                logoFallback.style.display = 'flex';
+                logoFallback.textContent = 'ECNPC'; // Assegurem el text correcte
+            }
+        }
+
+        function loadLogo(logoUrl) {
+            const logoImg = document.getElementById('logoImage');
+            const logoFallback = document.getElementById('logoFallback');
+            
+            if (!logoImg || !logoFallback) {
+                console.error('Elements del logo no trobats');
+                return;
+            }
+
+            console.log('=== Carregant logo al DOM ===');
+            console.log('URL a carregar:', logoUrl.substring(0, 50) + '...');
+            
+            logoImg.onload = function() {
+                console.log('✅ Logo carregat correctament al DOM');
+                this.style.display = 'block';
+                logoFallback.style.display = 'none';
+            };
+            
+            logoImg.onerror = function() {
+                console.error('❌ Error carregant el logo al DOM');
+                this.style.display = 'none';
+                logoFallback.style.display = 'flex';
+                logoFallback.textContent = 'ECNPC';
+            };
+            
+            // Establim la URL - això activarà onload o onerror
+            logoImg.src = logoUrl;
         }
 
         async function loadData() {
@@ -2182,17 +2262,36 @@
         function addLevelRow() { document.getElementById('levelsList').insertAdjacentHTML('beforeend', levelRowHTML({id: 'l_' + Date.now(), name: '', score: 0, description: ''})); }
         async function handleSaveRubric() { let totalWeight = 0; const criteria = Array.from(document.getElementById('criteriaList').children).map(el => { const w = parseFloat(el.querySelector('.crit-weight').value) || 0; totalWeight += w; return { id: el.dataset.id, name: el.querySelector('.crit-name').value, weight: w }; }); if (Math.abs(totalWeight - 100) > 0.1 && criteria.length > 0) { alert('La suma dels pesos dels criteris ha de ser 100%.'); return; } const levels = Array.from(document.getElementById('levelsList').children).map(el => ({ id: el.dataset.id, name: el.children[0].value, score: parseFloat(el.children[1].value) || 0, description: el.children[2].value })); const rubricData = { id: document.getElementById('rubricId').value, name: document.getElementById('rubricName').value, description: document.getElementById('rubricDesc').value, criteria, levels }; showLoading(true); const result = await run('saveRubric', rubricData); showLoading(false); if (result.success) renderRubricsList(); else alert(result.error); }
         async function debugCurrentModule() {
-            if (!state.modulId) { alert('Cal seleccionar un mòdul primer'); return; }
-            console.log('=== CLIENT SIDE DEBUG ===');
-            console.log('Mòdul actual:', state.modulId, 'RAs:', state.ras, 'Instruments:', state.instruments, 'Instruments per RA:', state.instrumentsByRA);
+            console.log('=== COMENÇANT DEBUG COMPLET ===');
             try {
-                const result = await run('debugInstruments', state.modulId);
-                console.log('=== SERVER SIDE DEBUG ===', result);
+                // 1. Debug del logo
+                console.log('1. DEBUG LOGO - Cridant debugLogo()...');
+                const logoResult = await run('debugLogo');
+                console.log('Resultat debugLogo:', logoResult);
+                
+                // 2. Test manual de getInitialData
+                console.log('2. DEBUG INITIAL DATA - Cridant getInitialData()...');
+                const initialData = await run('getInitialData');
+                console.log('Resultat getInitialData:', initialData);
+                
+                // 3. Netegem cache
+                console.log('3. NETEJANT CACHE...');
                 const clearResult = await run('clearCache');
-                console.log('Cache esborrada:', clearResult);
-                alert('Debug completat. Revisa la consola per veure els resultats. Es recarregaran les dades...');
-                await loadData();
-            } catch (error) { console.error('Error en debug:', error); alert('Error en debug: ' + error.message); }
+                console.log('Cache netejar:', clearResult);
+                
+                // 4. Test de l'estat actual
+                console.log('4. ESTAT ACTUAL DEL CLIENT:');
+                console.log('- state.logoUrl:', state.logoUrl ? 'DEFINIT' : 'UNDEFINED');
+                console.log('- Logo img display:', document.getElementById('logoImage')?.style.display);
+                console.log('- Logo fallback display:', document.getElementById('logoFallback')?.style.display);
+                console.log('- Logo fallback text:', document.getElementById('logoFallback')?.textContent);
+                
+                alert('Debug completat! Revisa la consola per veure tots els detalls.');
+                
+            } catch (error) { 
+                console.error('❌ Error en debug:', error); 
+                alert('Error en debug: ' + error.message); 
+            }
         }
         async function deleteRubric(rubricaId, rubricaName) { if (confirm(`Estàs segur que vols eliminar la rúbrica "${rubricaName}"? Aquesta acció no es pot desfer.`)) { showLoading(true); const result = await run('deleteRubric', rubricaId); showLoading(false); if (result.success) renderRubricsList(); else alert(result.error); } }
         function getGradeClass(grade) {
