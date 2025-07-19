@@ -616,3 +616,395 @@ function clearCache() {
         };
     }
 }
+
+// --- FUNCIONS D'ENVIAMENT DE CORREUS ---
+
+function sendInstrumentGrade(instrumentId, grupId, modulId) {
+    try {
+        const instrument = getSheetDataAsObjectArray_(CONFIG.PESTANYES.INSTRUMENTS)
+            .find(i => String(i.Instrument_ID) === String(instrumentId));
+        
+        if (!instrument) {
+            return { success: false, error: "Instrument no trobat." };
+        }
+
+        const modul = getSheetDataAsObjectArray_(CONFIG.PESTANYES.MODULS)
+            .find(m => String(m.Modul_ID) === String(modulId));
+        
+        const grup = getSheetDataAsObjectArray_(CONFIG.PESTANYES.GRUPS)
+            .find(g => String(g.Grup_ID) === String(grupId));
+
+        const alumnesGrup = getAlumnesWithEmailsByGrup_(grupId);
+        const qualificacions = getSheetDataAsObjectArray_(CONFIG.PESTANYES.QUALIFICACIONS);
+
+        let emailsSent = 0;
+        let emailsWithErrors = 0;
+
+        alumnesGrup.forEach(alumne => {
+            try {
+                const nota = qualificacions.find(q => 
+                    String(q.Alumne_ID) === String(alumne.Alumne_ID) && 
+                    String(q.Instrument_ID) === String(instrumentId)
+                );
+
+                const notaValue = nota ? nota.Nota : 'Pendent';
+                
+                const emailContent = generateInstrumentEmailContent_(
+                    alumne.Nom_Complet, 
+                    instrument.Nom_Instrument, 
+                    notaValue, 
+                    modul ? modul.Nom_Modul : 'Mòdul desconegut',
+                    grup ? grup.Nom_Grup : 'Grup desconegut'
+                );
+
+                const recipients = [alumne.Correu_alumne];
+                if (alumne.Informar_Pares && alumne.Correu_tutor) {
+                    recipients.push(alumne.Correu_tutor);
+                }
+
+                const subject = `Qualificació: ${instrument.Nom_Instrument} - ${alumne.Nom_Complet}`;
+                
+                GmailApp.sendEmail(
+                    recipients.join(','),
+                    subject,
+                    emailContent
+                );
+                
+                emailsSent++;
+            } catch (emailError) {
+                console.error(`Error enviant correu a ${alumne.Nom_Complet}:`, emailError);
+                emailsWithErrors++;
+            }
+        });
+
+        return {
+            success: true,
+            message: `Correus enviats: ${emailsSent}. Errors: ${emailsWithErrors}`,
+            details: { sent: emailsSent, errors: emailsWithErrors }
+        };
+
+    } catch (error) {
+        return { success: false, error: `Error enviant correus: ${error.message}` };
+    }
+}
+
+function sendRAGrades(raId, grupId, modulId) {
+    try {
+        const ra = getSheetDataAsObjectArray_(CONFIG.PESTANYES.RA)
+            .find(r => String(r.RA_ID) === String(raId));
+        
+        if (!ra) {
+            return { success: false, error: "RA no trobat." };
+        }
+
+        const modul = getSheetDataAsObjectArray_(CONFIG.PESTANYES.MODULS)
+            .find(m => String(m.Modul_ID) === String(modulId));
+        
+        const grup = getSheetDataAsObjectArray_(CONFIG.PESTANYES.GRUPS)
+            .find(g => String(g.Grup_ID) === String(grupId));
+
+        const alumnesGrup = getAlumnesWithEmailsByGrup_(grupId);
+        const instruments = getSheetDataAsObjectArray_(CONFIG.PESTANYES.INSTRUMENTS)
+            .filter(i => String(i.Modul_ID) === String(modulId) && String(i.RA_ID) === String(raId));
+        const qualificacions = getSheetDataAsObjectArray_(CONFIG.PESTANYES.QUALIFICACIONS);
+
+        let emailsSent = 0;
+        let emailsWithErrors = 0;
+
+        alumnesGrup.forEach(alumne => {
+            try {
+                const notesInstruments = instruments.map(inst => {
+                    const nota = qualificacions.find(q => 
+                        String(q.Alumne_ID) === String(alumne.Alumne_ID) && 
+                        String(q.Instrument_ID) === String(inst.Instrument_ID)
+                    );
+                    return {
+                        nom: inst.Nom_Instrument,
+                        nota: nota ? nota.Nota : 'Pendent',
+                        pes: inst.Ponderacio_Instrument
+                    };
+                });
+
+                const notaRA = calculateRAGradeForEmail_(alumne.Alumne_ID, raId, instruments, qualificacions);
+                
+                const emailContent = generateRAEmailContent_(
+                    alumne.Nom_Complet,
+                    ra.Nom_RA,
+                    notesInstruments,
+                    notaRA,
+                    modul ? modul.Nom_Modul : 'Mòdul desconegut',
+                    grup ? grup.Nom_Grup : 'Grup desconegut'
+                );
+
+                const recipients = [alumne.Correu_alumne];
+                if (alumne.Informar_Pares && alumne.Correu_tutor) {
+                    recipients.push(alumne.Correu_tutor);
+                }
+
+                const subject = `Qualificacions RA: ${ra.Nom_RA} - ${alumne.Nom_Complet}`;
+                
+                GmailApp.sendEmail(
+                    recipients.join(','),
+                    subject,
+                    emailContent
+                );
+                
+                emailsSent++;
+            } catch (emailError) {
+                console.error(`Error enviant correu a ${alumne.Nom_Complet}:`, emailError);
+                emailsWithErrors++;
+            }
+        });
+
+        return {
+            success: true,
+            message: `Correus enviats: ${emailsSent}. Errors: ${emailsWithErrors}`,
+            details: { sent: emailsSent, errors: emailsWithErrors }
+        };
+
+    } catch (error) {
+        return { success: false, error: `Error enviant correus: ${error.message}` };
+    }
+}
+
+function sendMPGrades(grupId, modulId) {
+    try {
+        const modul = getSheetDataAsObjectArray_(CONFIG.PESTANYES.MODULS)
+            .find(m => String(m.Modul_ID) === String(modulId));
+        
+        const grup = getSheetDataAsObjectArray_(CONFIG.PESTANYES.GRUPS)
+            .find(g => String(g.Grup_ID) === String(grupId));
+
+        const alumnesGrup = getAlumnesWithEmailsByGrup_(grupId);
+        const ras = getSheetDataAsObjectArray_(CONFIG.PESTANYES.RA)
+            .filter(r => String(r.Modul_ID) === String(modulId));
+        const instruments = getSheetDataAsObjectArray_(CONFIG.PESTANYES.INSTRUMENTS)
+            .filter(i => String(i.Modul_ID) === String(modulId));
+        const qualificacions = getSheetDataAsObjectArray_(CONFIG.PESTANYES.QUALIFICACIONS);
+
+        let emailsSent = 0;
+        let emailsWithErrors = 0;
+
+        alumnesGrup.forEach(alumne => {
+            try {
+                const notesRA = ras.map(ra => {
+                    const instrumentsRA = instruments.filter(i => String(i.RA_ID) === String(ra.RA_ID));
+                    const notaRA = calculateRAGradeForEmail_(alumne.Alumne_ID, ra.RA_ID, instrumentsRA, qualificacions);
+                    return {
+                        nom: ra.Nom_RA,
+                        nota: notaRA,
+                        pes: ra.Ponderacio_RA
+                    };
+                });
+
+                const notaFinalMP = calculateMPGradeForEmail_(notesRA);
+                
+                const emailContent = generateMPEmailContent_(
+                    alumne.Nom_Complet,
+                    notesRA,
+                    notaFinalMP,
+                    modul ? modul.Nom_Modul : 'Mòdul desconegut',
+                    grup ? grup.Nom_Grup : 'Grup desconegut'
+                );
+
+                const recipients = [alumne.Correu_alumne];
+                if (alumne.Informar_Pares && alumne.Correu_tutor) {
+                    recipients.push(alumne.Correu_tutor);
+                }
+
+                const subject = `Notes finals MP: ${modul ? modul.Nom_Modul : 'Mòdul'} - ${alumne.Nom_Complet}`;
+                
+                GmailApp.sendEmail(
+                    recipients.join(','),
+                    subject,
+                    emailContent
+                );
+                
+                emailsSent++;
+            } catch (emailError) {
+                console.error(`Error enviant correu a ${alumne.Nom_Complet}:`, emailError);
+                emailsWithErrors++;
+            }
+        });
+
+        return {
+            success: true,
+            message: `Correus enviats: ${emailsSent}. Errors: ${emailsWithErrors}`,
+            details: { sent: emailsSent, errors: emailsWithErrors }
+        };
+
+    } catch (error) {
+        return { success: false, error: `Error enviant correus: ${error.message}` };
+    }
+}
+
+// --- FUNCIONS AUXILIARS PER A CORREUS ---
+
+function getAlumnesWithEmailsByGrup_(grupId) {
+    const alumnatDnis = new Set(getSheetDataAsObjectArray_(CONFIG.PESTANYES.ALUMNAT_GRUP)
+        .filter(r => String(r.Grup_ID) === String(grupId))
+        .map(r => r.DNI));
+    
+    return getSheetDataAsObjectArray_(CONFIG.PESTANYES.ALUMNAT)
+        .filter(a => alumnatDnis.has(a.DNI))
+        .map(a => ({
+            Alumne_ID: a.Alumne_ID,
+            Nom_Complet: a.Nom_Complet || `${a.Cognom1 || ''}, ${a.Nom || ''}`,
+            Correu_alumne: a.Correu_alumne,
+            Correu_tutor: a.Correu_tutor,
+            Informar_Pares: a.Informar_Pares === true || a.Informar_Pares === 'TRUE'
+        }))
+        .filter(a => a.Correu_alumne); // Només alumnes amb correu vàlid
+}
+
+function calculateRAGradeForEmail_(alumneId, raId, instruments, qualificacions) {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    
+    instruments.forEach(inst => {
+        const nota = qualificacions.find(q => 
+            String(q.Alumne_ID) === String(alumneId) && 
+            String(q.Instrument_ID) === String(inst.Instrument_ID)
+        );
+        
+        if (nota && nota.Nota !== '' && nota.Nota !== null) {
+            const notaNum = parseFloat(nota.Nota);
+            const weight = parseFloat(inst.Ponderacio_Instrument || 0);
+            if (!isNaN(notaNum) && !isNaN(weight)) {
+                weightedSum += notaNum * weight;
+                totalWeight += weight;
+            }
+        }
+    });
+    
+    return totalWeight === 0 ? 'Pendent' : (weightedSum / totalWeight).toFixed(1);
+}
+
+function calculateMPGradeForEmail_(notesRA) {
+    let weightedSum = 0;
+    let totalWeight = 0;
+    
+    notesRA.forEach(ra => {
+        if (ra.nota !== 'Pendent') {
+            const notaNum = parseFloat(ra.nota);
+            const weight = parseFloat(ra.pes || 0);
+            if (!isNaN(notaNum) && !isNaN(weight)) {
+                weightedSum += notaNum * weight;
+                totalWeight += weight;
+            }
+        }
+    });
+    
+    return totalWeight === 0 ? 'Pendent' : (weightedSum / totalWeight).toFixed(1);
+}
+
+function generateInstrumentEmailContent_(nomAlumne, nomInstrument, nota, nomModul, nomGrup) {
+    const dataActual = new Date().toLocaleDateString('ca-ES');
+    
+    return `
+Benvolgut/da ${nomAlumne},
+
+T'informem sobre la teva qualificació en l'instrument d'avaluació "${nomInstrument}" del mòdul "${nomModul}".
+
+DETALLS DE LA QUALIFICACIÓ:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 Mòdul: ${nomModul}
+👥 Grup: ${nomGrup}
+📝 Instrument: ${nomInstrument}
+🎯 Nota: ${nota}
+
+${nota !== 'Pendent' ? (parseFloat(nota) >= 5 ? 
+'✅ FELICITATS! Has assolit els objectius d\'aquest instrument.' : 
+'⚠️ Aquesta nota indica que necessites millorar en aquest instrument. Et recomanem revisar els continguts i consultar amb el professorat.') : 
+'⏳ La teva qualificació encara està pendent.'}
+
+Si tens cap dubte sobre aquesta qualificació, no dubtis en contactar amb el teu professorat.
+
+Salutacions cordials,
+Equip docent
+${dataActual}
+
+---
+Aquest correu s'ha generat automàticament des del Quadern de Notes.
+    `.trim();
+}
+
+function generateRAEmailContent_(nomAlumne, nomRA, notesInstruments, notaRA, nomModul, nomGrup) {
+    const dataActual = new Date().toLocaleDateString('ca-ES');
+    
+    const instrumentsDetails = notesInstruments.map(inst => 
+        `• ${inst.nom}: ${inst.nota} (Pes: ${(inst.pes * 100).toFixed(0)}%)`
+    ).join('\n');
+    
+    return `
+Benvolgut/da ${nomAlumne},
+
+T'informem sobre les teves qualificacions en el Resultat d'Aprenentatge "${nomRA}" del mòdul "${nomModul}".
+
+DETALLS DE LES QUALIFICACIONS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 Mòdul: ${nomModul}
+👥 Grup: ${nomGrup}
+🎯 Resultat d'Aprenentatge: ${nomRA}
+
+INSTRUMENTS D'AVALUACIÓ:
+${instrumentsDetails}
+
+🏆 NOTA FINAL DEL RA: ${notaRA}
+
+${notaRA !== 'Pendent' ? (parseFloat(notaRA) >= 5 ? 
+'✅ EXCEL·LENT! Has assolit tots els objectius d\'aquest Resultat d\'Aprenentatge.' : 
+'⚠️ Aquesta nota indica que necessites millorar alguns aspectes d\'aquest RA. Et recomanem revisar els continguts i consultar amb el professorat.') : 
+'⏳ Algunes qualificacions encara estan pendents.'}
+
+Si tens cap dubte sobre aquestes qualificacions, no dubtis en contactar amb el teu professorat.
+
+Salutacions cordials,
+Equip docent
+${dataActual}
+
+---
+Aquest correu s'ha generat automàticament des del Quadern de Notes.
+    `.trim();
+}
+
+function generateMPEmailContent_(nomAlumne, notesRA, notaFinalMP, nomModul, nomGrup) {
+    const dataActual = new Date().toLocaleDateString('ca-ES');
+    
+    const raDetails = notesRA.map(ra => 
+        `• ${ra.nom}: ${ra.nota} (Pes: ${(ra.pes * 100).toFixed(0)}%)`
+    ).join('\n');
+    
+    return `
+Benvolgut/da ${nomAlumne},
+
+T'informem sobre les teves notes finals del Mòdul Professional "${nomModul}".
+
+RESUM FINAL DEL MÒDUL:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 Mòdul: ${nomModul}
+👥 Grup: ${nomGrup}
+
+RESULTATS D'APRENENTATGE:
+${raDetails}
+
+🏆 NOTA FINAL DEL MÒDUL PROFESSIONAL: ${notaFinalMP}
+
+${notaFinalMP !== 'Pendent' ? (parseFloat(notaFinalMP) >= 5 ? 
+'🎉 FELICITATS! Has superat amb èxit aquest Mòdul Professional. El teu esforç i dedicació han donat els seus fruits.' : 
+'⚠️ La nota final indica que no has assolit els objectius mínims d\'aquest mòdul. Et recomanem revisar tots els continguts i consultar amb el professorat per planificar estratègies de millora.') : 
+'⏳ Algunes qualificacions encara estan pendents per completar la nota final.'}
+
+Si tens cap dubte sobre aquestes qualificacions o necessites orientació acadèmica, no dubtis en contactar amb el teu professorat o tutor.
+
+Salutacions cordials,
+Equip docent
+${dataActual}
+
+---
+Aquest correu s'ha generat automàticament des del Quadern de Notes.
+    `.trim();
+}
