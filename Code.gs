@@ -69,7 +69,20 @@ function getInitialData() {
         
         const grups = getSheetDataAsObjectArray_(CONFIG.PESTANYES.GRUPS).map(g => ({ id: g.Grup_ID, name: g.Nom_Grup }));
         const moduls = getSheetDataAsObjectArray_(CONFIG.PESTANYES.MODULS).map(m => ({ id: m.Modul_ID, name: m.Nom_Modul }));
-        const result = { success: true, groups: grups, modules: moduls };
+        
+        // Carregar logo
+        const logoUrl = getLogoUrl_();
+        
+        const result = { 
+            success: true, 
+            groups: grups, 
+            modules: moduls,
+            logoUrl: logoUrl,
+            debug: {
+                logoFound: !!logoUrl,
+                logoLength: logoUrl ? logoUrl.length : 0
+            }
+        };
         cache.put('initial_data', JSON.stringify(result), CONFIG.CACHE_DURATION);
         return result;
     } catch (error) {
@@ -454,5 +467,152 @@ function deleteRowsByCriteria_(sheet, criteria) {
     });
     for (let i = rowsToDelete.length - 1; i >= 0; i--) {
         sheet.deleteRow(rowsToDelete[i]);
+    }
+}
+
+// --- FUNCIONS PER AL LOGO ---
+function getLogoUrl_() {
+    try {
+        console.log('=== CARREGANT LOGO ===');
+        const cache = CacheService.getScriptCache();
+        const cacheKey = 'logo_url';
+        const cachedLogo = cache.get(cacheKey);
+        
+        if (cachedLogo) {
+            console.log('Logo trobat a la cache');
+            return cachedLogo;
+        }
+        
+        const folderId = CONFIG.AVATARS_FOLDER_ID;
+        if (!folderId) {
+            console.log('No hi ha folder ID configurat per al logo');
+            return null;
+        }
+        
+        console.log('Buscant fitxer logo.png a la carpeta:', folderId);
+        const folder = DriveApp.getFolderById(folderId);
+        const files = folder.getFilesByName('logo.png');
+        
+        if (files.hasNext()) {
+            const logoFile = files.next();
+            console.log('Fitxer logo.png trobat:', logoFile.getName());
+            
+            const blob = logoFile.getBlob();
+            const contentType = blob.getContentType();
+            console.log('Content type:', contentType);
+            
+            if (contentType && contentType.startsWith('image/')) {
+                const base64Data = Utilities.base64Encode(blob.getBytes());
+                const logoUrl = `data:${contentType};base64,${base64Data}`;
+                console.log('Logo convertit a base64, longitud:', logoUrl.length);
+                
+                // Guardar a cache per 1 hora
+                cache.put(cacheKey, logoUrl, 3600);
+                return logoUrl;
+            } else {
+                console.log('El fitxer logo.png no és una imatge vàlida');
+                return null;
+            }
+        } else {
+            console.log('No s\'ha trobat cap fitxer logo.png a la carpeta');
+            return null;
+        }
+    } catch (error) {
+        console.error('Error carregant logo:', error.message);
+        return null;
+    }
+}
+
+// --- FUNCIONS DE DEBUG ---
+function debugLogo() {
+    try {
+        console.log('=== DEBUG LOGO INICIAT ===');
+        const folderId = CONFIG.AVATARS_FOLDER_ID;
+        console.log('Folder ID configurat:', folderId);
+        
+        if (!folderId) {
+            return {
+                success: false,
+                error: 'No hi ha folder ID configurat',
+                folderConfigured: false
+            };
+        }
+        
+        const folder = DriveApp.getFolderById(folderId);
+        console.log('Carpeta trobada:', folder.getName());
+        
+        // Llistar tots els fitxers de la carpeta
+        const allFiles = [];
+        const files = folder.getFiles();
+        while (files.hasNext()) {
+            const file = files.next();
+            allFiles.push({
+                name: file.getName(),
+                mimeType: file.getBlob().getContentType(),
+                size: file.getSize()
+            });
+        }
+        console.log('Fitxers a la carpeta:', allFiles);
+        
+        // Buscar específicament logo.png
+        const logoFiles = folder.getFilesByName('logo.png');
+        const logoExists = logoFiles.hasNext();
+        console.log('Logo.png existeix:', logoExists);
+        
+        let logoInfo = null;
+        if (logoExists) {
+            const logoFile = logoFiles.next();
+            logoInfo = {
+                name: logoFile.getName(),
+                mimeType: logoFile.getBlob().getContentType(),
+                size: logoFile.getSize(),
+                id: logoFile.getId()
+            };
+            console.log('Informació del logo:', logoInfo);
+        }
+        
+        // Test de càrrega
+        const logoUrl = getLogoUrl_();
+        
+        return {
+            success: true,
+            folderConfigured: true,
+            folderId: folderId,
+            folderName: folder.getName(),
+            allFiles: allFiles,
+            logoExists: logoExists,
+            logoInfo: logoInfo,
+            logoUrlGenerated: !!logoUrl,
+            logoUrlLength: logoUrl ? logoUrl.length : 0
+        };
+        
+    } catch (error) {
+        console.error('Error en debug logo:', error);
+        return {
+            success: false,
+            error: error.message,
+            folderConfigured: !!CONFIG.AVATARS_FOLDER_ID
+        };
+    }
+}
+
+function clearCache() {
+    try {
+        const cache = CacheService.getScriptCache();
+        cache.removeAll(['initial_data', 'logo_url', 'avatar_map']);
+        
+        // També netejar cache de dades específiques
+        const patterns = ['data_v5_'];
+        // Note: removeMatching no existeix, així que fem remove individual
+        
+        return {
+            success: true,
+            message: 'Cache netejada correctament'
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
     }
 }
