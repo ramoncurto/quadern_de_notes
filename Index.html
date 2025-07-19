@@ -214,15 +214,19 @@
         .logo-icon {
             width: 32px;
             height: 32px;
-            background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
             border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--color-white);
-            font-weight: var(--font-weight-bold);
             box-shadow: 0 4px 12px rgba(0, 119, 182, 0.3);
             border: 2px solid rgba(255, 255, 255, 0.2);
+            overflow: hidden;
+        }
+        
+        .logo-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
         
         .header-controls {
@@ -610,6 +614,65 @@
         }
 
         /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* GRADE INPUT STATUS COLORS                                                       */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .grade-input-completed {
+            background-color: #d1fae5 !important; /* Verd pastel */
+        }
+        
+        .grade-input-pending {
+            background-color: #fee2e2 !important; /* Vermell pastel */
+        }
+        
+        .rubric-button-completed {
+            background-color: #d1fae5 !important; /* Verd pastel */
+            border-color: #10b981 !important;
+            color: #065f46 !important;
+        }
+        
+        .rubric-button-pending {
+            background-color: #fee2e2 !important; /* Vermell pastel */
+            border-color: #ef4444 !important;
+            color: #991b1b !important;
+        }
+        
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        /* DISABLED INSTRUMENT COLUMN STYLES                                               */
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
+        
+        .instrument-column-disabled {
+            background-color: #f3f4f6 !important; /* Gris clar */
+            opacity: 0.7;
+        }
+        
+        .grade-input-disabled {
+            background-color: #e5e7eb !important; /* Gris */
+            color: #9ca3af !important;
+            cursor: not-allowed !important;
+            border-color: #d1d5db !important;
+        }
+        
+        .grade-input-disabled:focus {
+            box-shadow: none !important;
+            border-color: #d1d5db !important;
+        }
+        
+        .rubric-button-disabled {
+            background-color: #e5e7eb !important; /* Gris */
+            color: #9ca3af !important;
+            border-color: #d1d5db !important;
+            cursor: not-allowed !important;
+            opacity: 0.6;
+        }
+        
+        .rubric-button-disabled:hover {
+            background-color: #e5e7eb !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════════ */
         /* STUDENT INTERFACE                                                               */
         /* ═══════════════════════════════════════════════════════════════════════════════ */
         
@@ -737,7 +800,7 @@
             box-shadow: var(--shadow-lg);
             z-index: 50;
             display: none;
-            min-width: 140px;
+            min-width: 180px;
             overflow: hidden;
             margin-top: var(--spacing-1);
         }
@@ -1285,8 +1348,10 @@
     <header class="application-header">
         <div class="header-container">
             <a href="#" class="application-logo">
-                <div class="logo-icon">GA</div>
-                <span>QUadern de notes</span>
+                <div class="logo-icon">
+                    <img src="https://drive.google.com/uc?id=1LkntW9-YTsU6s3Wvwrkp8Q6-NkoKNyX0" alt="Logo ECNPC" onerror="this.style.display='none'; this.parentElement.innerHTML='IECNPC';">
+                </div>
+                <span>Quadern de notes</span>
             </a>
             
             <div class="header-controls">
@@ -1404,7 +1469,7 @@
             state.grupId = document.getElementById('grupSelector').value;
             state.modulId = document.getElementById('modulSelector').value;
             if (!state.grupId || !state.modulId) { alert("Cal seleccionar grup i mòdul."); return; }
-            state.activeFilter = 'all'; // Reset filter on new data load
+            state.activeFilter = 'all';
             showLoading(true);
             document.getElementById('emptyState').style.display = 'none';
             document.getElementById('mainContent').style.display = 'none';
@@ -1412,7 +1477,6 @@
                 const data = await run('getGradesData', state.grupId, state.modulId);
                 if (data.success) {
                     Object.assign(state, data);
-                    // Assegurar que els IDs siguin strings per evitar problemes de comparació
                     state.instruments = state.instruments.map(inst => ({
                         ...inst,
                         raId: String(inst.raId)
@@ -1440,6 +1504,7 @@
             finally { showLoading(false); }
         }
         
+        // FUNCIÓ MODIFICADA: Control manual dels estats dels instruments
         function getInstrumentInsights(instrument, alumneIds, qualificacions) {
             const gradesEntered = alumneIds.filter(id => {
                 const q = qualificacions[id]?.[instrument.id];
@@ -1447,34 +1512,34 @@
             }).length;
 
             const totalStudents = alumneIds.length;
-            const isFullyGraded = totalStudents > 0 && gradesEntered === totalStudents;
-
-            let status;
+            
+            // Estat manual definit pel professor - NO automàtic
+            let status = instrument.estatManual || 'Programat';
             let statusColor;
 
-            if (isFullyGraded) {
-                status = 'Qualificat';
-                statusColor = 'var(--color-success)';
-            } else {
-                status = instrument.estatManual || 'Programat'; 
-                switch (status) {
-                    case 'Obert':
-                        statusColor = 'var(--color-primary)';
-                        break;
-                    case 'Finalitzat':
-                        statusColor = 'var(--color-error)';
-                        break;
-                    default: 
-                        status = 'Programat';
-                        statusColor = 'var(--color-gray-500)';
-                }
+            switch (status) {
+                case 'En realització':
+                    statusColor = 'var(--color-primary)';
+                    break;
+                case 'Pendent de qualificar':
+                    statusColor = 'var(--color-warning)';
+                    break;
+                case 'Qualificat':
+                    statusColor = 'var(--color-success)';
+                    break;
+                case 'Finalitzat':
+                    statusColor = 'var(--color-error)';
+                    break;
+                default: // 'Programat'
+                    status = 'Programat';
+                    statusColor = 'var(--color-gray-500)';
             }
             
             return {
                 status: status,
                 statusColor: statusColor,
                 progressText: `${gradesEntered} / ${totalStudents}`,
-                isPending: !isFullyGraded
+                isPending: status !== 'Qualificat' && status !== 'Finalitzat'
             };
         }
 
@@ -1523,7 +1588,6 @@
             }
             return `<span class="status-badge">${icon} ${text}</span>`;
         }
-
 
         function calculateRaInsights(raId) {
             const studentIds = state.alumnes.map(a => a.id);
@@ -1580,16 +1644,9 @@
                 const instruments = state.instrumentsByRA[viewId] || [];
                 const alumneIds = state.alumnes.map(a => a.id);
                 
-                let instrumentsCompletats = 0;
-                instruments.forEach(inst => {
-                    const gradesEntered = alumneIds.filter(id => {
-                        const q = state.qualificacions[id]?.[inst.id];
-                        return q !== '' && q !== null && q !== undefined;
-                    }).length;
-                    if (gradesEntered === alumneIds.length && alumneIds.length > 0) {
-                        instrumentsCompletats++;
-                    }
-                });
+                // Comptar instruments segons l'estat manual (no automàtic)
+                let instrumentsQualidicats = instruments.filter(inst => inst.estatManual === 'Qualificat').length;
+                let instrumentsFinalitzats = instruments.filter(inst => inst.estatManual === 'Finalitzat').length;
                 
                 document.getElementById('summaryBar').innerHTML = `
                     <div class="insight-metric">
@@ -1608,9 +1665,9 @@
                         <div class="metric-trend"><span class="trend-indicator ${insights.atRisk === 0 ? 'trend-positive' : 'trend-negative'}"></span> ${insights.atRisk === 0 ? 'Excel·lent' : 'Atenció'}</div>
                     </div>
                     <div class="insight-metric">
-                        <span class="metric-value">${instrumentsCompletats}/${instruments.length}</span>
-                        <span class="metric-label">Instruments</span>
-                        <div class="metric-trend"><span class="trend-indicator ${instrumentsCompletats === instruments.length ? 'trend-positive' : 'trend-neutral'}"></span> ${instrumentsCompletats === instruments.length ? 'Completats' : 'En procés'}</div>
+                        <span class="metric-value">${instrumentsQualidicats + instrumentsFinalitzats}/${instruments.length}</span>
+                        <span class="metric-label">Instruments Avaluats</span>
+                        <div class="metric-trend"><span class="trend-indicator ${instrumentsQualidicats + instrumentsFinalitzats === instruments.length ? 'trend-positive' : 'trend-neutral'}"></span> ${instrumentsQualidicats + instrumentsFinalitzats === instruments.length ? 'Completats' : 'En procés'}</div>
                     </div>
                 `;
             }
@@ -1678,19 +1735,22 @@
             const alumneIds = state.alumnes.map(a => a.id);
             const instrumentHeadersHTML = instruments.map(inst => {
                 const insights = getInstrumentInsights(inst, alumneIds, state.qualificacions);
+                const isProgramat = insights.status === 'Programat';
+                const headerClass = isProgramat ? 'instrument-column-disabled' : '';
+                
                 return `
-                    <th class="text-center" style="padding: 0;">
+                    <th class="text-center ${headerClass}" style="padding: 0;">
                         <div class="instrument-header" id="instrument-card-${inst.id}">
                             <div class="instrument-title">
                                 ${inst.name}
-                                ${insights.isPending ? `<span class="pending-indicator" title="Qualificacions pendents">⚠️</span>` : ''}
                             </div>
                             <div class="instrument-weight">(${inst.ponderacio}%)</div>
                             <div class="instrument-status" style="background-color: ${insights.statusColor};" onclick="toggleStatusMenu('${inst.id}')">${insights.status}</div>
-                            <div class="instrument-progress">${insights.progressText}</div>
                             <div class="status-dropdown" id="status-menu-${inst.id}">
                                 <button class="status-option" onclick="changeInstrumentStatus('${inst.id}', 'Programat')">Programat</button>
-                                <button class="status-option" onclick="changeInstrumentStatus('${inst.id}', 'Obert')">Obert</button>
+                                <button class="status-option" onclick="changeInstrumentStatus('${inst.id}', 'En realització')">En realització</button>
+                                <button class="status-option" onclick="changeInstrumentStatus('${inst.id}', 'Pendent de qualificar')">Pendent de qualificar</button>
+                                <button class="status-option" onclick="changeInstrumentStatus('${inst.id}', 'Qualificat')">Qualificat</button>
                                 <button class="status-option" onclick="changeInstrumentStatus('${inst.id}', 'Finalitzat')">Finalitzat</button>
                             </div>
                         </div>
@@ -1709,8 +1769,11 @@
                     </td>
                     ${instruments.map(inst => {
                         const stats = calculateInstrumentStats(inst.id, filteredAlumnes);
+                        const isProgramat = (inst.estatManual || 'Programat') === 'Programat';
+                        const cellClass = isProgramat ? 'instrument-column-disabled' : '';
+                        
                         return `
-                            <td class="text-center">
+                            <td class="text-center ${cellClass}">
                                 <div style="font-size: var(--font-size-xs); line-height: 1.3;">
                                     <div style="margin-bottom: 2px;"><strong>M:</strong> ${stats.average}</div>
                                     <div style="margin-bottom: 2px;"><strong>%SN:</strong> ${stats.percentWithoutGrades}%</div>
@@ -1859,11 +1922,35 @@
             
             const instrumentCellsHTML = instruments.map(inst => { 
                 const nota = state.qualificacions[alumne.id]?.[inst.id] ?? ''; 
+                const isCompleted = nota !== '' && nota !== null && nota !== undefined;
+                const isProgramat = (inst.estatManual || 'Programat') === 'Programat';
+                const cellClass = isProgramat ? 'instrument-column-disabled' : '';
+                
                 if (inst.rubricaId && state.definicionsRubriques[inst.rubricaId]) { 
                     const notaDisplay = nota !== '' ? parseFloat(nota).toFixed(1) : '-'; 
-                    return `<td class="text-center"><button class="btn btn-secondary btn-sm" onclick="openRubricModal('${alumne.id}', '${inst.id}')">Rúbrica (${notaDisplay})</button></td>`; 
+                    let buttonClass, buttonDisabled;
+                    
+                    if (isProgramat) {
+                        buttonClass = 'rubric-button-disabled';
+                        buttonDisabled = 'disabled';
+                    } else {
+                        buttonClass = isCompleted ? 'rubric-button-completed' : 'rubric-button-pending';
+                        buttonDisabled = '';
+                    }
+                    
+                    return `<td class="text-center ${cellClass}"><button class="btn btn-secondary btn-sm ${buttonClass}" ${buttonDisabled} onclick="${isProgramat ? '' : `openRubricModal('${alumne.id}', '${inst.id}')`}">Rúbrica (${notaDisplay})</button></td>`; 
                 } else { 
-                    return `<td class="text-center"><input type="number" class="grade-input" min="0" max="10" step="0.1" value="${nota}" data-alumne-id="${alumne.id}" data-instrument-id="${inst.id}" onchange="updateGrade(event)"></td>`; 
+                    let inputClass, inputDisabled;
+                    
+                    if (isProgramat) {
+                        inputClass = 'grade-input-disabled';
+                        inputDisabled = 'disabled';
+                    } else {
+                        inputClass = isCompleted ? 'grade-input-completed' : 'grade-input-pending';
+                        inputDisabled = '';
+                    }
+                    
+                    return `<td class="text-center ${cellClass}"><input type="number" class="grade-input ${inputClass}" min="0" max="10" step="0.1" value="${nota}" data-alumne-id="${alumne.id}" data-instrument-id="${inst.id}" onchange="updateGrade(event)" ${inputDisabled}></td>`; 
                 } 
             }).join('');
 
@@ -1907,16 +1994,14 @@
 
             const titleEl = card.querySelector('.instrument-title');
             const statusEl = card.querySelector('.instrument-status');
-            const progressEl = card.querySelector('.instrument-progress');
 
             if(titleEl) {
-                titleEl.innerHTML = `${instrument.name} ${insights.isPending ? `<span class="pending-indicator" title="Qualificacions pendents">⚠️</span>` : ''}`;
+                titleEl.innerHTML = `${instrument.name}`;
             }
             if(statusEl) {
                 statusEl.style.backgroundColor = insights.statusColor;
                 statusEl.textContent = insights.status;
             }
-            if(progressEl) progressEl.textContent = insights.progressText;
         }
 
         function updateRaDisplay(raId) {
@@ -1928,6 +2013,12 @@
             if (!state.qualificacions[alumneId]) state.qualificacions[alumneId] = {};
             state.qualificacions[alumneId][instrumentId] = newNota;
             state.pendingSaves.add(`${alumneId}-${instrumentId}`);
+            
+            // Actualitzar el color de l'input
+            const isCompleted = newNota !== '' && newNota !== null && newNota !== undefined;
+            input.classList.remove('grade-input-completed', 'grade-input-pending');
+            input.classList.add(isCompleted ? 'grade-input-completed' : 'grade-input-pending');
+            
             const instrument = state.instruments.find(i => String(i.id) === String(instrumentId));
             if (instrument) {
                 const raId = instrument.raId;
@@ -1991,6 +2082,14 @@
                     updateInstrumentCard(instrumentId);
                     const menu = document.getElementById(`status-menu-${instrumentId}`);
                     if(menu) menu.style.display = 'none';
+                    
+                    // Actualitzar la barra de resum perquè reflecteixi els canvis d'estat
+                    renderSummaryBar(state.currentRaId);
+                    
+                    // Recarregar la vista per aplicar els canvis d'habilitació/deshabilitació
+                    if (state.currentRaId && state.currentRaId !== 'mp_summary') {
+                        renderRAView(state.currentRaId);
+                    }
                 }
             } else {
                 alert(`Error: ${result.error}`);
@@ -2037,7 +2136,29 @@
             }
             document.getElementById('rubricFinalScore').textContent = score.toFixed(2);
         }
-        async function saveRubricEvaluation() { const { alumneId, instrumentId, selections } = currentRubricEvaluation; showLoading(true); try { await run('saveGradesBatch', [{ alumneId, instrumentId, rubricSelections: selections }], state.grupId, state.modulId); closeRubricModal(); await loadData(); } catch (e) { console.error("Error desant rúbrica:", e); } finally { showLoading(false); } }
+        async function saveRubricEvaluation() { 
+            const { alumneId, instrumentId, selections } = currentRubricEvaluation; 
+            showLoading(true); 
+            try { 
+                await run('saveGradesBatch', [{ alumneId, instrumentId, rubricSelections: selections }], state.grupId, state.modulId); 
+                closeRubricModal(); 
+                await loadData(); 
+                
+                // Actualitzar color del botó després de desar rúbrica
+                const rubricButton = document.querySelector(`button[onclick="openRubricModal('${alumneId}', '${instrumentId}')"]`);
+                if (rubricButton) {
+                    const hasGrade = state.qualificacions[alumneId]?.[instrumentId] !== '' && 
+                                    state.qualificacions[alumneId]?.[instrumentId] !== null && 
+                                    state.qualificacions[alumneId]?.[instrumentId] !== undefined;
+                    rubricButton.classList.remove('rubric-button-completed', 'rubric-button-pending');
+                    rubricButton.classList.add(hasGrade ? 'rubric-button-completed' : 'rubric-button-pending');
+                }
+            } catch (e) { 
+                console.error("Error desant rúbrica:", e); 
+            } finally { 
+                showLoading(false); 
+            } 
+        }
         function closeRubricModal() { document.getElementById('rubricModal').style.display = 'none'; }
         
         async function openConfigModal() { showLoading(true); try { const data = await run('getModuleConfig', state.modulId); if (data.success) { state.config = data; document.getElementById('configModal').style.display = 'flex'; switchModalTab('ra'); } } catch(e){console.error(e)} finally{showLoading(false)} }
