@@ -1,5 +1,5 @@
 /****************************************************************
- * GESTOR ADITTIO - CODI DEL SERVIDOR (CODE.GS) - v5.6 Correcció de Cache
+ * QUADERN DE NOTES - CODI DEL SERVIDOR (CODE.GS) - v5.6 Correcció de Cache
  *
  * Versió estable amb totes les correccions implementades.
  * - S'ha corregit l'error en la funció d'esborrat de la memòria cau.
@@ -24,7 +24,7 @@ const CONFIG = {
 function doGet(e) {
     const template = HtmlService.createTemplateFromFile('Index');
     return template.evaluate()
-        .setTitle('Gestor Adittio')
+        .setTitle('Quadern de notes')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
